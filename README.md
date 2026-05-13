@@ -31,10 +31,10 @@ The project consists of three core modules working in harmony:
     - **Structure:** Automatically parses bold terms and nested bullet points.
 
 ---
-##2. Install Dependencies:
-###pip install google-generativeai python-docx PyMuPDF docxcompose
+2. Install Dependencies:
+       pip install google-generativeai python-docx PyMuPDF docxcompose
 
-3. **Configure API:**
+4. **Configure API:**
    Add your Google Gemini API Key to your environment variables or `config.py`.
 
 ---
