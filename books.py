@@ -9,11 +9,11 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from google.generativeai.types import RequestOptions
 
 # --- CONFIGURATION ---
-API_KEY = "AIzaSyDN3N2B4xO5BjvEATgz4TGOk81UMrHNSbQ"
-FILE_PATH = "Ophthalmology-book.pdf"  # تأكد من أن هذا هو الملف المضغوط
-OUTPUT_DOCX = "Ophthalmology_med_summarry.docx"
-CHUNK_SIZE = 239  # رفع الحجم لزيادة جودة الربط بين المعلومات
-MAX_REQUESTS = 1
+API_KEY = "Your-API"
+FILE_PATH = "Yourbook.pdf"  # تأكد من أن هذا هو الملف المضغوط
+OUTPUT_DOCX = "output_summarry.docx"
+CHUNK_SIZE = 30 #you can put any number of pages # رفع الحجم لزيادة جودة الربط بين المعلومات
+MAX_REQUESTS = 20 #you can put any number of requests
 
 # إعداد المكتبة
 genai.configure(api_key=API_KEY)
@@ -120,7 +120,7 @@ def start_summarization():
         
         # البرومبت الاحترافي المطور
         prompt = f"""
-        You are an expert Medical Professor specialize.
+        You are an expert Medical Professor specializing.
         Task: Analyze pages {i} to {end_page} of the provided document.
         Produce a high-yield, cohesive academic summary for medical students.
 
