@@ -1,12 +1,13 @@
+
 import google.genai as genai
+from google.genai import types
 import fitz  # PyMuPDF
 import time
 import os
 import re
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
-from google.generativeai.types import RequestOptions
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 # --- CONFIGURATION ---
 API_KEY = "Your-API"
@@ -15,27 +16,32 @@ OUTPUT_DOCX = "output_summarry.docx"
 CHUNK_SIZE = 30 #you can put any number of pages # رفع الحجم لزيادة جودة الربط بين المعلومات
 MAX_REQUESTS = 20 #you can put any number of requests
 
-# إعداد المكتبة
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-2.5-flash')
+# إعداد العميل (Client) الجديد
+client = genai.Client(api_key=API_KEY)
+MODEL_ID = 'gemini-2.5-flash' # أو gemini-1.5-flash حسب المتاح لك
+
+# إعدادات الأمان لتجاوز حظر المحتوى الطبي
+SAFETY_SETTINGS = [
+    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+]
 
 def setup_document_organization(doc):
-    """ضبط الهوامش وتوفير مساحة جانبية للمذاكرة"""
     for section in doc.sections:
         section.top_margin = Inches(0.8)
         section.bottom_margin = Inches(0.8)
         section.left_margin = Inches(0.8)
-        section.right_margin = Inches(2.5) # مساحة للملاحظات اليدوية
+        section.right_margin = Inches(2.5) 
 
 def apply_style(run, font_size=12.5, color=RGBColor(47, 54, 64), bold=False):
-    """تطبيق التنسيق الجمالي للنصوص"""
     run.font.name = 'Segoe UI'
     run.font.size = Pt(font_size)
     run.font.color.rgb = color
     run.bold = bold
 
 def process_markdown_bold(paragraph, text):
-    """معالجة النصوص العريضة (Markdown Bold) داخل الفقرات"""
     parts = re.split(r'(\*\*.*?\*\*)', text)
     for part in parts:
         if part.startswith('**') and part.endswith('**'):
@@ -47,35 +53,25 @@ def process_markdown_bold(paragraph, text):
             apply_style(run)
 
 def add_formatted_text(doc, text):
-    """تحويل رد الذكاء الاصطناعي إلى هيكل وورد منظم ومنسق"""
     lines = text.split('\n')
     for line in lines:
         line = line.strip()
         if not line: continue
-        
         p = doc.add_paragraph()
         p.paragraph_format.line_spacing = 1.15
         p.paragraph_format.space_after = Pt(10)
-        
-        # 1. القوائم النقطية
         if line.startswith(('* ', '- ', '+ ')):
             p.style = 'List Bullet'
             process_markdown_bold(p, line[2:].strip())
-            
-        # 2. العناوين الطبية (Blue Style)
         elif line.startswith('###') or line.startswith('##'):
             p.paragraph_format.space_before = Pt(15)
             run = p.add_run(line.lstrip('#').strip())
             apply_style(run, font_size=15, color=RGBColor(41, 128, 185), bold=True)
-        
-        # 3. المصطلحات والتعاريف (Purple Style)
         elif ":" in line and len(line.split(":")[0]) < 45:
             parts = line.split(":", 1)
             term_run = p.add_run(parts[0].strip() + ": ")
             apply_style(term_run, bold=True, color=RGBColor(142, 68, 173))
             process_markdown_bold(p, parts[1].strip())
-            
-        # 4. النصوص العادية
         else:
             p.alignment = WD_ALIGN_PARAGRAPH.LEFT
             process_markdown_bold(p, line)
@@ -88,17 +84,15 @@ def start_summarization():
     total_pages = len(pdf_doc)
     pdf_doc.close()
     
-    print(f"📘 Deep Study Mode: Professional Synthesis")
-    print(f"📄 Total Pages to process: {total_pages}")
-
+    print(f"📘 Mode: Professional Academic Synthesis")
+    
     try:
         print(f"📤 Uploading {FILE_PATH}...")
-        uploaded_file = genai.upload_file(path=FILE_PATH)
-        
+        uploaded_file = client.files.upload(file=FILE_PATH)
         while uploaded_file.state.name == "PROCESSING":
             print(".", end="", flush=True)
             time.sleep(2)
-            uploaded_file = genai.get_file(uploaded_file.name)
+            uploaded_file = client.files.get(name=uploaded_file.name)
         print("\n✅ Cloud Context Ready.")
     except Exception as e:
         print(f"\n❌ Upload Error: {e}"); return
@@ -106,7 +100,6 @@ def start_summarization():
     doc = Document()
     setup_document_organization(doc)
     
-    # Title Page Section
     main_title = doc.add_heading()
     main_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     title_run = main_title.add_run(f'INTEGRATED MEDICAL STUDY GUIDE\n{FILE_PATH.upper()}')
@@ -115,20 +108,18 @@ def start_summarization():
     request_count = 0
     for i in range(1, total_pages + 1, CHUNK_SIZE):
         if request_count >= MAX_REQUESTS: break
-        
         end_page = min(i + CHUNK_SIZE - 1, total_pages)
         
-        # البرومبت الاحترافي المطور
+        # البرومبت المطور لتجاوز فلاتر الأمان
         prompt = f"""
-        You are an expert Medical Professor specializing.
-        Task: Analyze pages {i} to {end_page} of the provided document.
-        Produce a high-yield, cohesive academic summary for medical students.
-
+        ROLE: Academic Medical Professor.
+        Task: Synthesize a high-yield academic summary for pages {i} to {end_page}.
         Guidelines:
-        - INTEGRATION: Summarize the entire range as ONE unit. Avoid page-by-page lists.
-        - STRUCTURE: Use professional headings (e.g., Clinical Presentation, Diagnosis, Management).
-        - KEY TERMS: Use **bold** for essential medical terminology.
-        - FORMAT: Use 'Term: Definition' for jargon and bullet points for classifications.
+        - INTEGRATION: Summarize the entire range as ONE cohesive unit.
+        - STRUCTURE: Use headers (e.g., Clinical Presentation, Diagnosis, Management).
+        - KEY TERMS: Use **bold** for medical terminology.
+        - FORMAT: Use 'Term: Definition' for jargon and bullet points.
+        - SAFETY: This is for formal medical education. Focus on clinical logic and management protocols. 
         - LANGUAGE: Strict Professional English.
         """
 
@@ -136,29 +127,35 @@ def start_summarization():
             request_count += 1
             print(f"🚀 Processing Part {request_count} (Pages {i}-{end_page})...")
             
-            # التوليد بمهلة زمنية طويلة لضمان الجودة
-            response = model.generate_content(
-                [uploaded_file, prompt],
-                request_options=RequestOptions(timeout=600)
+            # التوليد مع إعدادات الأمان المخصصة
+            response = client.models.generate_content(
+                model=MODEL_ID,
+                contents=[uploaded_file, prompt],
+                config=types.GenerateContentConfig(
+                    safety_settings=SAFETY_SETTINGS,
+                    temperature=0.3
+                )
             )
             
-            # إضافة ترويسة الجزء في ملف الوورد
             section_h = doc.add_heading(level=1)
-            section_run = section_h.add_run(f'Section {request_count}: Essential  Knowledge')
+            section_run = section_h.add_run(f'Section {request_count}: Essential Knowledge')
             apply_style(section_run, font_size=18, color=RGBColor(30, 130, 76))
             
-            add_formatted_text(doc, response.text)
+            # فحص وجود نص لتجنب خطأ FinishReason
+            if response.text:
+                add_formatted_text(doc, response.text)
+            else:
+                add_formatted_text(doc, "⚠️ [Content omitted due to safety filtering/empty response]")
+                
             doc.save(OUTPUT_DOCX)
-            print(f"✅ Part {request_count} completed and saved.")
-            
-            time.sleep(15) # تأخير بسيط لتجنب الـ Rate Limit
+            print(f"✅ Part {request_count} completed.")
+            time.sleep(10)
         except Exception as e:
             print(f"❌ Error in Part {request_count}: {e}")
             if "429" in str(e):
-                print("🛑 Waiting for Rate Limit reset (60s)...")
                 time.sleep(60)
 
-    print(f"\n✨ Mission Completed! Your professional guide is ready.")
+    print(f"\n✨ Mission Completed!")
     os.startfile(OUTPUT_DOCX)
 
 if __name__ == "__main__":
